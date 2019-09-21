@@ -12,6 +12,7 @@ use React\Promise\PromiseInterface;
 use function React\Promise\reject;
 use function React\Promise\resolve;
 use Throwable;
+use React\Promise\FulfilledPromise;
 
 final class Filesystem implements CacheInterface
 {
@@ -43,13 +44,9 @@ final class Filesystem implements CacheInterface
      */
     public function get($key, $default = null): PromiseInterface
     {
-        return $this->has($key)->then(function (bool $has) use ($key, $default) {
-            if ($has === true) {
-                return $this->getFile($key)->getContents();
-            }
-
-            return resolve($default);
-        });
+        return new FulfilledPromise(
+            file_get_contents($this->path.DIRECTORY_SEPARATOR.$key)
+        );
     }
 
     /**
@@ -59,26 +56,8 @@ final class Filesystem implements CacheInterface
      */
     public function set($key, $value, $ttl = null): PromiseInterface
     {
-        $file = $this->getFile($key);
-        if (\strpos($key, \DIRECTORY_SEPARATOR) === false) {
-            return $this->putContents($file, $value);
-        }
-
-        $path = \explode(\DIRECTORY_SEPARATOR, $key);
-        \array_pop($path);
-        $path = \implode(\DIRECTORY_SEPARATOR, $path);
-
-        $dir = $this->filesystem->dir($this->path . $path);
-
-        return $dir->createRecursive()->then(null, function (Throwable $error) {
-            if ($error->getMessage() === 'mkdir(): File exists') {
-                return resolve(true);
-            }
-
-            return reject($error);
-        })->then(function () use ($file, $value): PromiseInterface {
-            return $this->putContents($file, $value);
-        });
+        file_put_contents($this->path.DIRECTORY_SEPARATOR.$key, $value, LOCK_EX);
+        resolve(true);
     }
 
     /**
@@ -86,13 +65,8 @@ final class Filesystem implements CacheInterface
      */
     public function delete($key): PromiseInterface
     {
-        return $this->has($key)->then(function () use ($key): PromiseInterface {
-            return $this->getFile($key)->remove();
-        })->then(function () {
-            return resolve(true);
-        }, function () {
-            return resolve(false);
-        });
+        unlink($this->path.DIRECTORY_SEPARATOR.$key);
+        resolve(true);
     }
 
     public function getMultiple(array $keys, $default = null): PromiseInterface
@@ -161,11 +135,9 @@ final class Filesystem implements CacheInterface
 
     public function has($key): PromiseInterface
     {
-        return $this->getFile($key)->exists()->then(function () {
-            return resolve(true);
-        }, function () {
-            return resolve(false);
-        });
+        return new FulfilledPromise(
+            file_exists($this->path.DIRECTORY_SEPARATOR.$key)
+        );
     }
 
     private function putContents(FileInterface $file, $value): PromiseInterface
