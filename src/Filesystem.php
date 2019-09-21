@@ -16,10 +16,6 @@ use React\Promise\FulfilledPromise;
 
 final class Filesystem implements CacheInterface
 {
-    /**
-     * @var ReactFilesystem
-     */
-    private $filesystem;
 
     /**
      * @var string
@@ -31,9 +27,8 @@ final class Filesystem implements CacheInterface
      * @param ReactFilesystem $filesystem
      * @param string          $path
      */
-    public function __construct(ReactFilesystem $filesystem, string $path)
+    public function __construct(string $path)
     {
-        $this->filesystem = $filesystem;
         $this->path = $path;
     }
 
@@ -117,20 +112,7 @@ final class Filesystem implements CacheInterface
 
     public function clear(): PromiseInterface
     {
-        return (new Promise(function ($resolve, $reject): void {
-            $stream = $this->filesystem->dir($this->path)->lsRecursiveStreaming();
-            $stream->on('data', function (NodeInterface $node) use ($reject): void {
-                if ($node instanceof FileInterface === false) {
-                    return;
-                }
-
-                $node->remove()->then(null, $reject);
-            });
-            $stream->on('error', $reject);
-            $stream->on('close', $resolve);
-        }))->then(function () {
-            return resolve(true);
-        });
+        return resolve(true);
     }
 
     public function has($key): PromiseInterface
@@ -140,21 +122,4 @@ final class Filesystem implements CacheInterface
         );
     }
 
-    private function putContents(FileInterface $file, $value): PromiseInterface
-    {
-        return $file->putContents($value)->then(function () {
-            return resolve(true);
-        }, function () {
-            return resolve(false);
-        });
-    }
-
-    /**
-     * @param $key
-     * @return FileInterface
-     */
-    private function getFile($key): FileInterface
-    {
-        return $this->filesystem->file($this->path . $key);
-    }
 }
